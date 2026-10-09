@@ -12,3 +12,14 @@ htmlcov/
 *.log
 *.dump
 dumps/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+*.bson
+*.archive
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json

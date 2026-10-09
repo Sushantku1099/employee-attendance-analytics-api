@@ -411,3 +411,125 @@ on an empty database; repeated startup on the large fixture reused existing inde
 so cold index creation on 100,000 preseeded logs is unverified. Plan/latency checks are
 fixture-specific, not a full benchmark. No public Git repository/submission was
 created or verified. No claim is made that all submission requirements are complete.
+
+## Pre-merge repository review (2026-10-09)
+
+Reviewed `Sushantku1099/employee-attendance-analytics-api` on the existing development
+branch. After `git fetch origin`, development and origin/development had zero
+commits of divergence. The starting working tree and staging area were clean.
+The GitHub repository is public, its default branch is main, and there was no open
+development-to-main PR. Earlier statements in this review about Git being absent
+record the state at those earlier reviews; they are no longer the current state.
+
+Changes are limited to README.md, .gitignore and this review. README now states that
+this is a Git repository, uses one interpreter for pip/uvicorn, recommends the safe
+full disposable runner, includes the Phase 3 database-free schema check, and clearly
+distinguishes Python 3.11 syntax checks from unexecuted runtime tests. Its proposed
+Python 3.11/MongoDB 7 workflow is documentation only; it was not enabled or executed.
+Ignore rules now also cover common lint/type/test environment caches, BSON/archive
+dumps and private-key/credential file formats. No application rewrite was justified.
+
+### Repository and author checks
+
+Executed `git status --short --branch`, `git diff --cached --stat`, `git ls-files`,
+`git ls-tree -r --name-only HEAD`, `git status --ignored --short`, and `git diff
+origin/main...development --stat`. There are 22 tracked files, including all three
+assignment contract files and the supplied sample data/script. No prohibited artifact
+is tracked or was initially staged. Existing .venv and .DS_Store remain ignored.
+A targeted scan of all tracked file contents found no GitHub-token, AWS-access-key,
+private-key-header or credential-bearing MongoDB URI patterns; this is a targeted
+check, not a comprehensive secret-scanner guarantee. A `git check-ignore --stdin`
+check passed for 20 representative prohibited paths. Required evaluation files
+remain tracked and unchanged. The PR includes the branch's existing assignment,
+test and verification files; the application code was already identical in main
+and development before this review.
+
+`git config --show-origin --get user.name` and the corresponding user.email query
+reported global configuration `sushant-ji <sushant@pods365.com>`. The starting latest
+commit was 9e0d36bc4cfbe5c3756b121b1bc1238883609157. GitHub's commit API associated
+both its author and committer with `sushant-ji`, although the active GitHub CLI
+account is Sushantku1099. No identity configuration or existing commit was changed.
+No credential/token values were included in the review.
+
+### Actual contract review
+
+Reread PROBLEM_STATEMENT.docx, openapi.yaml, DATA_MODEL.md, current app/main.py and
+the tests. Examined every endpoint's path, parameters, response fields/statuses,
+strict timestamp validation, truncation/storage, IST/overnight rules, rounding and
+conditional updates, not just the test summaries.
+
+- `punch_out`: the specific contract selects the latest punch at or before the
+  requested instant, including closed records. Before the earliest punch there is
+  no eligible record (404); exactly at the punch duration validation gives 422.
+  This explains the apparent conflict with the broader "at or before" error prose;
+  the existing selection and tests follow the specific query definition.
+- `update_attendance`/`regularize_attendance`: matching the old values/history and
+  atomically appending history prevents lost corrections; legacy missing fields
+  are distinguished from null in the conditional update.
+- `department_summary_pipeline`: eligible employees are the input, not logs;
+  no-log people count, future joiners do not, and hours/counts preserve record
+  weighting. `employee_monthly_pipeline` counts weekdays from the joining date.
+- `late_leaderboard_pipeline`: department filtering precedes `$rank`, ranking uses
+  only total minutes, and the cutoff precedes deterministic display sorting.
+- `department_trend_pipeline`: MongoDB generates every calendar date, counts daily
+  joining-date headcount, and windows the rounded rates within the requested range.
+- `explain_endpoint`: real executionStats uses the same query/pipeline and hints.
+  The general no-_id convention and raw-explain requirement overlap: raw explain
+  may contain internal MongoDB field references. It remains unsimplified as the
+  explain-specific contract requires; ordinary API documents still exclude _id.
+
+No new business-rule defect was established in this review. The existing extra
+joined_on request regex is still a generated-schema difference, not a demonstrated
+runtime rejection of a valid YYYY-MM-DD calendar date. Re-executed the temporary
+read-only comparison with `PYTHONPATH=. .venv/bin/python -B
+/tmp/compare_phase3_openapi.py`: 60/61 normalized groups matched, including all
+Phase 3 groups. OpenAPI version/descriptive metadata also differ; no exact document
+match is claimed.
+
+### Executed verification and runtime availability
+
+```bash
+.venv/bin/python -B verify_phase3.py > /tmp/candidate-premerge-verification.log 2>&1
+```
+
+Exit 0. The runner executed `.venv/bin/python -B <script>` for each script below
+with its own disposable MongoDB settings:
+
+| Script | Actual result |
+|---|---|
+| openapi_tests.py | 8 passed |
+| phase3_schema_tests.py | 2 passed |
+| static_helper_tests.py | 38 checks passed |
+| phase2_unit_tests.py | 7 passed |
+| phase1_tests.py | 9 passed |
+| phase2_tests.py | 21 passed |
+| phase3_tests.py | 13 passed |
+
+98 suite tests/checks passed, zero failures or skips. MongoDB 7.0.43; API ready in
+0.43 seconds. Two empty-database HTTP checks, seven index assertions, repeated
+lifespan and served-schema equality checks passed. Seven large-fixture explain plans
+on 100,000 synthetic logs had IXSCAN and no root or lookup collection scans. The
+small-fixture explain checks and representative punch-out plan also passed. The
+runner terminated its API and removed its own container; no user database was
+accessed and sample_seed.py was not run.
+
+Compilation via `.venv/bin/python -B -` and `python3.11 -B -` each passed all ten
+application/test/runner files using the compile script documented in the Phase 3
+section; application import passed under .venv. `git diff --check` passed.
+Existing runtime versions: Python 3.9.6, FastAPI 0.128.8, Uvicorn 0.39.0, PyMongo
+4.18.3, Pydantic 2.13.5, python-dotenv 1.2.1.
+
+Checked `python3.11 -B -c 'import fastapi, uvicorn, pymongo, pydantic, dotenv'`:
+failed with ModuleNotFoundError for fastapi. The UV-managed Python 3.11.16 path
+likewise lacks all five packages. The bundled desktop runtime is Python 3.12.14,
+also without all application requirements. No suitable existing Python 3.11
+environment was found in the inspected locations. No dependencies were installed
+and no environment was created. Proposed CI in README uses setup-python 3.11,
+requirements.txt, docker pull mongo:7 and the same complete runner on a fresh
+GitHub-hosted Ubuntu machine. CI execution remains pending approval; dependency
+versions/image tags are not locked.
+
+Remaining risks: Python 3.11 runtime and clean-install verification are still
+pending; MongoDB 6, hidden grader data, long-history stress and cold index creation
+on preseeded 100,000-log data are unverified. Existing normal-route database-outage
+handling is unchanged. Passing these fixtures does not prove every contract case.
