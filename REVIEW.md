@@ -533,3 +533,37 @@ Remaining risks: Python 3.11 runtime and clean-install verification are still
 pending; MongoDB 6, hidden grader data, long-history stress and cold index creation
 on preseeded 100,000-log data are unverified. Existing normal-route database-outage
 handling is unchanged. Passing these fixtures does not prove every contract case.
+
+
+## Python 3.11 CI verification confirmed (2026-10-09)
+
+The earlier Python 3.11 runtime limitation was resolved by GitHub Actions, not by
+installing dependencies locally. Verified the successful pull-request run:
+[37941164000](https://github.com/Sushantku1099/employee-attendance-analytics-api/actions/runs/37941164000).
+It tested head commit 1855e7471309de1cd8dc2db12f2a9a317a319ea3 using Python 3.11.17
+and MongoDB 7.0.43. The current workflow is present on main at
+[.github/workflows/verify.yml](https://github.com/Sushantku1099/employee-attendance-analytics-api/blob/main/.github/workflows/verify.yml),
+with pull_request targeting main and workflow_dispatch triggers.
+
+Read-only verification commands executed:
+
+```bash
+gh run view 37941164000 --repo Sushantku1099/employee-attendance-analytics-api --json conclusion,status,headSha,event,createdAt,workflowName,jobs,url
+gh run view 37941164000 --repo Sushantku1099/employee-attendance-analytics-api --log > /tmp/candidate-python311-ci.log
+gh api 'repos/Sushantku1099/employee-attendance-analytics-api/contents/.github/workflows/verify.yml?ref=main' --jq .content | base64 --decode
+```
+
+Run conclusion: success. The recorded command `python -B verify_phase3.py` passed
+98 suite tests/checks (8 existing schema, 2 Phase 3 schema, 38 helpers, 7 Phase 2
+unit, 9 Phase 1 HTTP, 21 Phase 2 HTTP, 13 Phase 3 HTTP/plan tests). API readiness
+was 0.41 seconds. Startup/index, served-schema and query-plan checks passed,
+including seven indexed plans on 100,000 synthetic logs with no root or lookup
+collection scans. The runner removed its disposable container. These results were
+verified from the existing CI log; tests were not rerun during this documentation
+update. README now reflects completed CI rather than a proposed workflow.
+
+The earlier local Python 3.9.6/MongoDB 7.0.43 results remain historical facts.
+Requirements are not fully locked and mongo:7 is a moving tag. MongoDB 6, hidden
+grader data, long-history stress and cold index creation on the preseeded large
+dataset remain unverified. No application, test or workflow code changed in this
+update; no dependencies were installed and no branch, commit or remote was changed.
