@@ -46,11 +46,13 @@ python -B phase3_schema_tests.py
 
 ## Verification status
 
-The full regression suite passed locally on Python 3.9.6 with MongoDB 7.0.43. It also passed in GitHub Actions on **Python 3.11 and MongoDB 7** on 9 October 2026.
+Latest verified matrix: **104 tests passed per job on Python 3.11 with MongoDB 6.0.28 and 7.0.43**, on 10 October 2026. [Successful MongoDB 6/7 matrix run](https://github.com/Sushantku1099/employee-attendance-analytics-api/actions/runs/38026821086) tested PR #5 head `e003d8ab706f5e99883151bcf0d7dcb869ccf750`. This is PR verification, not verification of a future merge commit.
+
+The suite also passed locally on Python 3.9.6 with both database versions. Earlier Python 3.11/MongoDB 7 verification on 9 October remains historical evidence.
 
 The CI workflow is `.github/workflows/verify.yml`. It runs for pull requests targeting `main` and supports manual execution through GitHub Actions. The successful pull-request run executed `verify_phase3.py`, covering the regression suite, startup and index checks, schema checks, and query-plan verification using 100,000 synthetic attendance logs.
 
-- [CI run](https://github.com/Sushantku1099/employee-attendance-analytics-api/actions/runs/37941164000)
+- [Historical MongoDB 7 CI run](https://github.com/Sushantku1099/employee-attendance-analytics-api/actions/runs/37941164000)
 - [CI workflow](https://github.com/Sushantku1099/employee-attendance-analytics-api/blob/main/.github/workflows/verify.yml)
 
 The workflow verifies Python 3.11 against both `mongo:6.0` and `mongo:7` image tags. Dependencies are not fully locked, so this is not a guarantee of bit-for-bit reproducible builds. The full suite also passed locally on Python 3.9.6 with MongoDB 6.0.28 on 10 October 2026. The assignment's hidden grading dataset remains unverified.

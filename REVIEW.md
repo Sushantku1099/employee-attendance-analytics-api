@@ -720,3 +720,38 @@ the selected-image runner command; it compiled verify_phase3.py via compile()
 without bytecode. Exit 0. `git diff --check`: exit 0. Inspected the complete diff:
 only runner, workflow and README/REVIEW/DECISIONS changed; assignment, application,
 requirements, tests and sample data remained unchanged.
+
+## Final submission audit (2026-10-10)
+
+Audited e003d8ab706f5e99883151bcf0d7dcb869ccf750 against the DOCX, supplied YAML
+and data model. Main remains 31a296579be8bf13e3e547b8f7671991e29507fc; PR #5 is
+OPEN and mergeable, not merged. Its changes do not alter application/contracts/tests.
+Observed successful matrix run 38026821086 for e003d8a: 104 tests per Python 3.11
+job with MongoDB 6.0.28 and 7.0.43, including startup/schema and seven indexed
+100,000-log executionStats plans. Read status with `gh run view 38026821086
+--repo Sushantku1099/employee-attendance-analytics-api --json status,conclusion,headSha,jobs,url`
+and logs using the same command with `--log`; both exited 0. Database tests were
+not rerun. `.venv/bin/python -B openapi_contract_tests.py`: exit 0, 6 tests passed.
+
+All 12 required operations are present. Inspection covered R1-R10, strict request
+validation, UTC storage/epoch serialization, legacy defaults, concurrency/history,
+server-side pagination/analytics, shared explain builders and startup indexes.
+No reproducible application defect was established. Exact OpenAPI equality is not
+claimed: metadata/representation differences and the explicit joined_on regex
+exception remain. README now prominently links the matrix evidence and identifies
+its exact PR head rather than implying a future merge commit was tested.
+
+Tracked-content audit: 24 files; required documents and samples present, with
+identical blobs to original main 5168c8e. No tracked .env, environments, caches,
+Dockerfile, dumps or key files. Targeted credential-pattern scan found no candidate
+files; it is not an exhaustive secret-history audit. Local ignored files were not
+removed. Repository is public. No seed script or database was used in this audit.
+
+Remaining risks: hidden grading fixtures, long-history stress, cold startup/index
+creation on 100,000 preseeded logs, all filter/performance combinations, and real
+HTTP outage behavior beyond the mocked health check are unverified. Requirements
+and image tags remain unlocked. DECISIONS answers all five questions but is 246
+words including the compatibility note, modestly over the suggested 150-200 total.
+Earlier REVIEW statements are dated historical findings, not current-state claims.
+Submission recommendation: ready with these risks; human review/merge of PR #5
+and selection of the final submission SHA remain outstanding. No automatic merge.
