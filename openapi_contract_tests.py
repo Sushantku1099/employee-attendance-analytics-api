@@ -31,12 +31,6 @@ with patch('pymongo.MongoClient', return_value=NoDatabase()):
 
 METADATA = {'title', 'description', 'example', 'examples', 'summary', 'operationId', 'tags'}
 METHODS = {'get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace'}
-# EmployeeIn validates YYYY-MM-DD strings before checking the calendar date.
-# The supplied create schema specifies format: date without a pattern. Allow only
-# this exact extra regex at this exact request field, not other date constraints.
-KNOWN_DIFFERENCE = ('/employees', 'post', 'request', 'content', 'application/json',
-                    'schema', 'properties', 'joined_on', 'pattern')
-DATE_PATTERN = r'^\d{4}-\d{2}-\d{2}$'
 
 
 def normalize(value, document, mapping=False):
@@ -119,12 +113,7 @@ def unexpected_differences(expected, actual):
     found = differences(contract_groups(expected), contract_groups(actual))
     # Group keys are tuples; flatten them for a precise, readable exception path.
     found = [(path[0] + path[1:], before, after) for path, before, after in found]
-    allowed = (KNOWN_DIFFERENCE, MISSING, DATE_PATTERN)
-    unexpected = [item for item in found if item != allowed]
-    # Removing this known constraint also requires an explicit baseline review.
-    if not any(path == KNOWN_DIFFERENCE for path, _, _ in found):
-        unexpected.append((KNOWN_DIFFERENCE, DATE_PATTERN, MISSING))
-    return unexpected, allowed in found
+    return found
 
 
 class ContractTests(unittest.TestCase):
@@ -134,28 +123,18 @@ class ContractTests(unittest.TestCase):
         cls.generated = app.openapi()
 
     def test_complete_contract(self):
-        unexpected, known = unexpected_differences(self.supplied, self.generated)
+        unexpected = unexpected_differences(self.supplied, self.generated)
         self.assertEqual(unexpected, [], '\n'.join(map(str, unexpected)))
-        self.assertTrue(known)
-        print('Contract comparison: all paths/operations, parameters, bodies and responses checked; '
-              'explicit joined_on regex exception observed.')
+        print('Contract comparison: zero normalized differences; no schema exceptions.')
 
-    def test_joined_on_exception_is_exact(self):
-        raw = differences(contract_groups(self.supplied), contract_groups(self.generated))
-        flattened = [(path[0] + path[1:], before, after) for path, before, after in raw]
-        self.assertEqual(flattened, [(KNOWN_DIFFERENCE, MISSING, DATE_PATTERN)])
-        self.assertEqual(unexpected_differences(self.supplied, self.generated), ([], True))
-        for case in ('changed', 'missing', 'other_field'):
-            with self.subTest(case=case):
+    def test_joined_on_schema_has_no_extra_constraints(self):
+        schema = self.generated['components']['schemas']['EmployeeIn']['properties']['joined_on']
+        self.assertEqual(normalize(schema, self.generated), {'type': 'string', 'format': 'date'})
+        for field in ('joined_on', 'name'):
+            with self.subTest(field=field):
                 document = copy.deepcopy(self.generated)
-                fields = document['components']['schemas']['EmployeeIn']['properties']
-                if case == 'changed':
-                    fields['joined_on']['pattern'] = '.*'
-                elif case == 'missing':
-                    fields['joined_on'].pop('pattern')
-                else:
-                    fields['name']['pattern'] = DATE_PATTERN
-                self.assertTrue(unexpected_differences(self.supplied, document)[0])
+                document['components']['schemas']['EmployeeIn']['properties'][field]['pattern'] = r'^\d{4}-\d{2}-\d{2}$'
+                self.assertTrue(unexpected_differences(self.supplied, document))
 
     def test_nested_references_preserve_constraints(self):
         document = {'components': {'schemas': {
@@ -188,7 +167,7 @@ class ContractTests(unittest.TestCase):
             with self.subTest(mutation=index):
                 document = copy.deepcopy(self.generated)
                 mutate(document)
-                self.assertTrue(unexpected_differences(self.supplied, document)[0])
+                self.assertTrue(unexpected_differences(self.supplied, document))
 
     def test_metadata_named_fields_are_preserved(self):
         schema = {'type': 'object', 'properties': {'description': {'type': 'string'}, 'title': {'type': 'integer'}}}

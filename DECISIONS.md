@@ -11,3 +11,5 @@
 5. **At larger scale.** Measure latency, examined documents and memory before changing indexes. Consider precomputed daily summaries and cursor pagination. Long histories may need a revision counter. Keep raw executionStats available to check changes.
 
 6. **MongoDB compatibility checks.** The isolated runner defaults to MongoDB 7 and accepts an explicit MongoDB 6.0 image choice. UUID database names and containers keep each run separate. CI runs the full suite on both versions rather than reducing the older-version checks; application code is shared unchanged.
+
+7. **Contract checks and failures.** Date-format schemas describe joined_on without an extra regex; a custom validator still requires an exact ISO calendar date. The independent comparison has no field exceptions. Only health declares 503 in the supplied contract, so other connectivity failures remain a documented limitation rather than adding response codes. Requirements remain unlocked until a Python 3.11 lock can be generated and verified through a clean installation.

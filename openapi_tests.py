@@ -29,6 +29,7 @@ class OpenAPITests(unittest.TestCase):
         self.assertEqual(set(employee['required']), {'emp_code', 'name', 'email', 'department', 'joined_on'})
         self.assertEqual(employee['properties']['joined_on']['type'], 'string')
         self.assertEqual(employee['properties']['joined_on']['format'], 'date')
+        self.assertNotIn('pattern', employee['properties']['joined_on'])
         punch = self.schema['components']['schemas']['PunchInIn']
         self.assertEqual(punch['required'], ['emp_code'])
         timestamp = punch['properties']['punched_at']
@@ -105,7 +106,9 @@ class OpenAPITests(unittest.TestCase):
     def test_joined_on_runtime(self):
         body = dict(emp_code='EMP0001', name='A', email='a@b.com', department='QA')
         self.assertEqual(EmployeeIn(**body, joined_on='2024-02-29').joined_on, '2024-02-29')
-        for value in ('2026-02-29', '20260201', '2026-2-01', '', None, 1783312500000):
+        for value in ('2026-02-29', '2026-02-30', '20260401', '2026-2-01',
+                      '2026-04-01T00:00:00Z', '1783312500000', '2026-W14-3',
+                      ' 2026-04-01', '2026-04-01 ', '', None, 1783312500000):
             with self.subTest(value=value), self.assertRaises(ValidationError):
                 EmployeeIn(**body, joined_on=value)
 

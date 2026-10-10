@@ -65,6 +65,21 @@ class Phase1Tests(unittest.TestCase):
                 self.assertEqual(status, 422)
                 self.assertIn('detail', body)
 
+    def test_joined_on_dates_over_http(self):
+        for value in ('2026-02-29', '2026-02-30', '20260401', '2026-4-01',
+                      '2026-04-01T00:00:00Z', '1783312500000', '2026-W14-3',
+                      ' 2026-04-01', '2026-04-01 ', None):
+            with self.subTest(value=value):
+                status, body = request('POST', '/employees',
+                    employee('EMP9911', department='DateValidation', joined_on=value))
+                self.assertEqual(status, 422, body)
+                self.assertIsInstance(body['detail'], list)
+                self.assertTrue(any(error['loc'] == ['body', 'joined_on'] for error in body['detail']))
+        status, body = request('POST', '/employees',
+            employee('EMP9911', department='DateValidation', joined_on='2024-02-29'))
+        self.assertEqual(status, 201, body)
+        self.assertEqual(body['joined_on'], '2024-02-29')
+
     def test_duplicate_employee(self):
         self.assertEqual(request('POST', '/employees', employee('EMP9901')),
                          (409, {'detail': 'emp_code already exists'}))
