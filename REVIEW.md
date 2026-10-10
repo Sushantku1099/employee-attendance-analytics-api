@@ -673,3 +673,85 @@ Reference expansion supports this contract's acyclic local references, including
 chains and nested fields. Recursive self-referential schema cycles and external
 references are unsupported. Unused component definitions and runtime behavior
 remain outside the structural comparison; exact document equality is not claimed.
+
+## MongoDB 6 compatibility verification (2026-10-10)
+
+Started with a clean working tree at bd52cbf on the existing verification branch;
+fetched and fast-forwarded to merged main 31a2965. Inspected README, requirements,
+workflow and runner before changes. `docker image ls --format '{{.Repository}}:{{.Tag}} {{.ID}}'`
+showed mongo:7 available and no mongo:6.0 image. Reported the missing image before
+`docker pull mongo:6.0` (exit 0); no Python dependencies or environments installed.
+Pulled image digest: sha256:8b6d8f5bbedb25cb73517b65cf99f13aeb75ad5b157a56c479287a840bbad3ac.
+
+Runner now accepts only --mongo-image mongo:6.0 or mongo:7 (default remains 7).
+It requires the image already present and does not pull automatically. Each run
+uses a UUID container name, dynamic loopback port, UUID database name, explicit
+URI/database overrides and an absent-database assertion. No mounts or existing
+user databases are used. Finally cleanup terminates only the owned API process
+and stops only its --rm container. The database-free comparator runs first.
+
+Commands and observed results, using the existing Python 3.9.6 environment:
+
+- `.venv/bin/python -B verify_phase3.py > /tmp/candidate-mongo7-compat.log 2>&1`:
+  exit 0, MongoDB 7.0.43, 104 tests passed.
+- `.venv/bin/python -B verify_phase3.py --mongo-image mongo:6.0 > /tmp/candidate-mongo6-compat.log 2>&1`:
+  exit 0, MongoDB 6.0.28, 104 tests passed.
+- `.venv/bin/python -B verify_phase3.py --help`: exit 0, both image choices shown.
+
+Each full run passed 6 contract, 8 schema, 2 Phase 3 schema, 38 helper, 7 Phase 2
+unit, 9 Phase 1 HTTP, 21 Phase 2 HTTP and 13 Phase 3 HTTP/plan tests. Additional
+checks passed: 2 empty-database analytics, 7 startup/index assertions with repeated
+lifespan, served schema equality, and punch-out IXSCAN without COLLSCAN. Seven
+real executionStats plans on 100,000 logs had no root or lookup collection scans.
+Both runs confirmed removal of their own disposable container. No compatibility
+defect was established; no application behavior was changed.
+
+The workflow now runs independent Python 3.11 jobs for mongo:6.0 and mongo:7 with
+fail-fast disabled, unchanged read-only permissions and 20-minute per-job timeout.
+Each pulls only its selected test image and runs the complete suite. This preserves
+MongoDB 7 coverage and makes the declared MongoDB 6 support a continuing check.
+Local results do not establish compatibility with every MongoDB 6 patch, hidden
+grader data, long histories or different deployment configurations. Tags and
+requirements remain moving/unlocked. Earlier limitations above are historical.
+
+`.venv/bin/python -B -` parsed the workflow with PyYAML BaseLoader and asserted
+both matrix images, fail-fast false, read-only permissions, 20-minute timeout and
+the selected-image runner command; it compiled verify_phase3.py via compile()
+without bytecode. Exit 0. `git diff --check`: exit 0. Inspected the complete diff:
+only runner, workflow and README/REVIEW/DECISIONS changed; assignment, application,
+requirements, tests and sample data remained unchanged.
+
+## Final submission audit (2026-10-10)
+
+Audited e003d8ab706f5e99883151bcf0d7dcb869ccf750 against the DOCX, supplied YAML
+and data model. Main remains 31a296579be8bf13e3e547b8f7671991e29507fc; PR #5 is
+OPEN and mergeable, not merged. Its changes do not alter application/contracts/tests.
+Observed successful matrix run 38026821086 for e003d8a: 104 tests per Python 3.11
+job with MongoDB 6.0.28 and 7.0.43, including startup/schema and seven indexed
+100,000-log executionStats plans. Read status with `gh run view 38026821086
+--repo Sushantku1099/employee-attendance-analytics-api --json status,conclusion,headSha,jobs,url`
+and logs using the same command with `--log`; both exited 0. Database tests were
+not rerun. `.venv/bin/python -B openapi_contract_tests.py`: exit 0, 6 tests passed.
+
+All 12 required operations are present. Inspection covered R1-R10, strict request
+validation, UTC storage/epoch serialization, legacy defaults, concurrency/history,
+server-side pagination/analytics, shared explain builders and startup indexes.
+No reproducible application defect was established. Exact OpenAPI equality is not
+claimed: metadata/representation differences and the explicit joined_on regex
+exception remain. README now prominently links the matrix evidence and identifies
+its exact PR head rather than implying a future merge commit was tested.
+
+Tracked-content audit: 24 files; required documents and samples present, with
+identical blobs to original main 5168c8e. No tracked .env, environments, caches,
+Dockerfile, dumps or key files. Targeted credential-pattern scan found no candidate
+files; it is not an exhaustive secret-history audit. Local ignored files were not
+removed. Repository is public. No seed script or database was used in this audit.
+
+Remaining risks: hidden grading fixtures, long-history stress, cold startup/index
+creation on 100,000 preseeded logs, all filter/performance combinations, and real
+HTTP outage behavior beyond the mocked health check are unverified. Requirements
+and image tags remain unlocked. DECISIONS answers all five questions in 199
+words (246 including the separate compatibility note), meeting the guidance.
+Earlier REVIEW statements are dated historical findings, not current-state claims.
+Submission recommendation: ready with these risks; human review/merge of PR #5
+and selection of the final submission SHA remain outstanding. No automatic merge.
