@@ -1,5 +1,64 @@
-Current changes and verification are recorded in "Submission contract quality update"
-at the end of this file. Earlier sections retain their dated historical findings.
+# Review & verification record
+
+[README](README.md) · [Design decisions](DECISIONS.md) · [HTTP contract](openapi.yaml)
+
+> **Reading guide:** the current verified baseline is summarized below. Earlier review entries are retained in the expandable history, including failures, limitations and fixes that later entries supersede.
+
+## Current verified baseline
+
+| Item | Observed evidence |
+|---|---|
+| **Merged main commit** | [`8ba3aa74a25b5350b13eb7e284f637fa95788a79`](https://github.com/Sushantku1099/employee-attendance-analytics-api/commit/8ba3aa74a25b5350b13eb7e284f637fa95788a79) |
+| **Automatic main-push CI** | [Run 38029819710 — success](https://github.com/Sushantku1099/employee-attendance-analytics-api/actions/runs/38029819710) |
+| **Runtime matrix** | Python 3.11.17 with MongoDB 6.0.28 and 7.0.43 |
+| **Per-job suite result** | 67 unittest tests + 38 helper checks passed |
+| **Large-data query evidence** | Seven executionStats plans on 100,000 synthetic logs; no root or lookup collection scans |
+| **Schema comparison** | Zero normalized structural differences; no field exceptions |
+| **Required punch-out regressions** | Closed latest record returns 409 and leaves the older shift open; six concurrent requests produce one 200 and five 409s |
+| **Isolation** | Fresh owned containers/databases; logs confirm cleanup of each run's container |
+
+Assertions and subtest inputs are not counted as separate unittest methods. Empty-database, startup/index and served-schema checks are additional runner checks. Schema normalization does not establish exact OpenAPI document equality or complete runtime correctness.
+
+## Requirement coverage map
+
+| Area | Main evidence |
+|---|---|
+| Employee validation, duplicates and filtered pagination | `phase1_tests.py`, `openapi_tests.py` |
+| IST/overnight dates, truncation, grace, overtime and rounding | `static_helper_tests.py`, Phase 1/2 HTTP tests |
+| Punch-out selection, duration, half day and concurrency | `phase2_tests.py`, `phase2_unit_tests.py` |
+| Corrections, derived recalculation, actual-change history and stale updates | `phase2_tests.py`, `phase2_unit_tests.py` |
+| Joining dates, missing logs, headcount, weekends and rounding | `phase3_tests.py` |
+| Competition ties, rank cutoff and deterministic sorting | `phase3_tests.py` |
+| Daily gaps, null rates and moving-average windows | `phase3_tests.py` |
+| Full reachable API schema comparison | `openapi_contract_tests.py`, focused schema suites |
+| Startup/index idempotence, served schema and real query plans | `verify_phase3.py`, Phase 3 HTTP/plan tests |
+
+## Documentation presentation update — 10 October 2026
+
+Read the attached feedback and checked the successful main-push run directly:
+
+```bash
+gh run view 38029819710 --repo Sushantku1099/employee-attendance-analytics-api --json headSha,event,conclusion,url
+```
+
+Exit 0: event `push`, conclusion `success`, head `8ba3aa74a25b5350b13eb7e284f637fa95788a79`. The feedback's uncertainty about this run is superseded by that observed result. Existing logs provide the regression results above; no local database tests were rerun for presentation changes.
+
+README now brings setup, safe verification, endpoint navigation and current evidence together. DECISIONS keeps the five assignment answers and separates additional notes. This file preserves its historical review body below. Supplied DATA_MODEL.md, DOCX, YAML, sample data, application and tests remain unchanged by this presentation update.
+
+Presentation checks: a standard-library Python check validated local Markdown targets, balanced code fences/details, the unchanged protected files and exact preservation of the historical review body (exit 0). `.venv/bin/python -B openapi_contract_tests.py` passed all 6 tests with zero normalized differences; `git diff --check` exited 0. These are documentation/schema checks, not a new local database run.
+
+## Remaining limitations
+
+- No hidden-grader result or evaluation score is known.
+- Requirements and MongoDB tags are not locked; fresh CI installation is not a bit-for-bit reproducibility guarantee.
+- Long-history stress, cold index creation on 100,000 preseeded logs, every filter/deployment combination and uniform non-health outage responses remain unverified.
+- The schema comparator supports the contract's acyclic local references, not external references or self-referential cycles; unused components are not independently matched by name.
+- Historical findings below describe their dates and phases. Statements such as “not a Git repository” or “analytics unimplemented” are preserved history, not current claims.
+
+## Historical findings and verification
+
+<details>
+<summary><strong>Expand the complete chronological review record</strong></summary>
 
 # Phase 1 review — 9 October 2026
 
@@ -870,3 +929,6 @@ Final tracked-file scan found no prohibited paths or credential-pattern candidat
 this is a targeted scan, not an exhaustive history audit. Compared protected file
 bytes with base fe58ce9: assignment documents, both sample files, sample_seed.py,
 requirements.txt and the workflow are unchanged. Final git diff --check exited 0.
+
+
+</details>
