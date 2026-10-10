@@ -798,7 +798,7 @@ def department_summary_pipeline(month: str, department: Optional[str]):
     if department is not None:
         filters["department"] = department
     # Sum hours and record counts separately so employees with fewer logs get no extra weight.
-    group = {"_id": "$department", "headcount": {"$sum": 1}}
+    group: dict[str, Any] = {"_id": "$department", "headcount": {"$sum": 1}}
     for name in ("present_days", "hours_sum", "hours_count", "late_count", "total_late_minutes", "leave_count", "on_duty_count"):
         group[name] = {"$sum": statistic(name)}
     return [
@@ -813,7 +813,7 @@ def department_summary_pipeline(month: str, department: Optional[str]):
 
 def late_leaderboard_pipeline(month: str, department: Optional[str], limit: int):
     first, last = month_bounds(month)
-    pipeline = [
+    pipeline: list[dict[str, Any]] = [
         {"$match": {"date": {"$gte": first.isoformat(), "$lte": last.isoformat()}}},
         {"$group": {"_id": "$emp_code", "total_late_minutes": {"$sum": {"$ifNull": ["$late_minutes", 0]}},
             "late_count": {"$sum": {"$cond": [{"$gt": [{"$ifNull": ["$late_minutes", 0]}, 0]}, 1, 0]}}}},
