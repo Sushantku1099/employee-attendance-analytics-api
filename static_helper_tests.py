@@ -14,7 +14,7 @@ PASS = 0
 FAIL = 0
 
 
-def check(label, condition, detail=""):
+def check(label, condition, detail: object = ""):
     global PASS, FAIL
     if condition:
         print(f"  PASS  {label}")

@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from datetime import time as dtime
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, NoReturn, Optional, Union
 
 from bson import Decimal128, json_util
 from dotenv import load_dotenv
@@ -480,7 +480,7 @@ def list_attendance(
     }
 
 
-def attendance_validation_error(field: str, message: str):
+def attendance_validation_error(field: str, message: str) -> NoReturn:
     raise HTTPException(422, [{"loc": ["body", field], "msg": message, "type": "value_error"}])
 
 
@@ -593,19 +593,23 @@ def regularize_attendance(
         after.update(punch_in=None, punch_out=None, work_hours=None,
                      late_minutes=0, overtime_minutes=0, half_day=False)
     else:
-        if after["punch_in"] is None:
+        punch_in = after["punch_in"]
+        if not isinstance(punch_in, datetime):
             attendance_validation_error("punch_in", "a presence status requires punch_in")
-        punch_in_ist = after["punch_in"].astimezone(IST)
+        punch_in_ist = punch_in.astimezone(IST)
         if attendance_date(punch_in_ist, employee["shift_start"], employee["shift_end"]) != attendance_day:
             attendance_validation_error("punch_in", "punch_in must stay on the attendance date")
         after["late_minutes"] = compute_late_minutes(punch_in_ist, employee["shift_start"], attendance_day)
-        if after["punch_out"] is None:
+        punch_out = after["punch_out"]
+        if punch_out is None:
             after.update(work_hours=None, overtime_minutes=0, half_day=False)
         else:
-            validate_punch_duration(after["punch_in"], after["punch_out"])
-            after["work_hours"] = compute_work_hours(after["punch_in"], after["punch_out"])
+            if not isinstance(punch_out, datetime):
+                attendance_validation_error("punch_out", "punch_out must be a valid timestamp")
+            validate_punch_duration(punch_in, punch_out)
+            after["work_hours"] = compute_work_hours(punch_in, punch_out)
             after["overtime_minutes"] = compute_overtime(
-                after["punch_out"].astimezone(IST), employee["shift_start"], employee["shift_end"], attendance_day,
+                punch_out.astimezone(IST), employee["shift_start"], employee["shift_end"], attendance_day,
             )
             after["half_day"] = after["work_hours"] < 4.50
 
@@ -690,7 +694,7 @@ MONTH_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
 PRESENCE_STATUSES = ["PRESENT", "WFH", "ON_DUTY"]
 
 
-def query_error(parameter: str, message: str):
+def query_error(parameter: str, message: str) -> NoReturn:
     raise HTTPException(422, [{"loc": ["query", parameter], "msg": message, "type": "value_error"}])
 
 
@@ -790,7 +794,7 @@ def employee_monthly_pipeline(emp_code: str, month: str):
 
 def department_summary_pipeline(month: str, department: Optional[str]):
     first, last = month_bounds(month)
-    filters = {"joined_on": {"$lte": last.isoformat()}}
+    filters: dict[str, Any] = {"joined_on": {"$lte": last.isoformat()}}
     if department is not None:
         filters["department"] = department
     # Sum hours and record counts separately so employees with fewer logs get no extra weight.
@@ -863,16 +867,20 @@ def department_trend_pipeline(department: str, first: date, last: date):
 
 def analytics_operation(endpoint: str, emp_code=None, month=None, department=None, limit=10, start=None, end=None):
     """Build the same pipeline and index choice for reports and explain requests."""
-    if endpoint in ("employee_monthly", "department_summary", "late_leaderboard") and month is None:
-        query_error("month", "field required")
     if endpoint == "employee_monthly":
         if emp_code is None:
             query_error("emp_code", "field required")
+        if month is None:
+            query_error("month", "field required")
         return "employees", employee_monthly_pipeline(emp_code, month), "emp_code_1"
     if endpoint == "department_summary":
+        if month is None:
+            query_error("month", "field required")
         hint = "joined_on_1" if department is None else "department_1_joined_on_1"
         return "employees", department_summary_pipeline(month, department), hint
     if endpoint == "late_leaderboard":
+        if month is None:
+            query_error("month", "field required")
         return "attendance_logs", late_leaderboard_pipeline(month, department, limit), "date_1"
     if department is None:
         query_error("department", "field required")
