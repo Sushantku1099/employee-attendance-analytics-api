@@ -1,11 +1,13 @@
-# Employee Attendance & Analytics API — Phases 1–3
+# Employee Attendance & Analytics API
 
-The assignment requires Python 3.11+ and MongoDB 6.0+ (the grader uses MongoDB 7).
-All application code is in `app/main.py`. Implemented endpoints cover employees,
-punch-in/out, attendance listing/corrections, all four analytics reports, and real
-MongoDB executionStats output.
+FastAPI + PyMongo assignment implementation. Requires Python 3.11+ and MongoDB
+6.0+; all application code lives in `app/main.py`.
 
-From the repository root, using a Python 3.11+ environment:
+**Do not run `sample_seed.py` against a valuable database: it deletes collection
+contents. It is never needed for verification.**
+
+Start the API from the repository root, using a Python 3.11+ environment and your
+chosen MongoDB database:
 
 ```bash
 python -m pip install -r requirements.txt
@@ -14,27 +16,25 @@ export MONGO_DB=attendance_db
 python -m uvicorn app.main:app --port 8000
 ```
 
-An optional local `.env` may supply MongoDB settings; real environment variables
-have priority. Startup creates indexes and `GET /health` checks MongoDB. The
-supplied `sample_seed.py` deletes collection contents; it is not needed for tests
-and must only be used with an explicitly disposable database.
+A local `.env` is optional; real environment variables take priority. Startup
+creates indexes idempotently. `/health` returns 200 when MongoDB answers a ping.
 
-Run the complete regression suite with an existing environment that has the
-requirements installed, Docker running, and the `mongo:7` image already available:
+Run the complete isolated regression suite with the same installed requirements,
+Docker running and the `mongo:7` image already available:
 
 ```bash
 python -B verify_phase3.py
-# With the mongo:6.0 image already available:
-python -B verify_phase3.py --mongo-image mongo:6.0
 ```
 
-This runs Phase 1/2/3 helper, model, schema and actual HTTP tests, including query
-plans on 100,000 synthetic logs. It starts its own MongoDB container and API,
-installs nothing, never connects to an existing database, and removes its container
-on success or failure. `verify_phase2.py` runs only the earlier phases. For tests,
-prefer these isolated runners over manually pointing fixture scripts at a database.
+This is the authoritative test command. It starts its own API and fresh MongoDB
+container with a dynamic loopback port and unique database. It overrides database
+settings and removes only its own process/container, including on test failure.
+It installs nothing and never uses your application database. To check MongoDB 6,
+use `python -B verify_phase3.py --mongo-image mongo:6.0` with that image available.
+CI uses `pip install -r requirements.txt` and this runner for both images.
 
-Database-free checks can also run individually:
+The suite covers helpers/models, real HTTP requests, startup/indexes, OpenAPI and
+executionStats on 100,000 synthetic logs. Database-free checks can run separately:
 
 ```bash
 python -B static_helper_tests.py
@@ -44,22 +44,50 @@ python -B phase2_unit_tests.py
 python -B phase3_schema_tests.py
 ```
 
-## Verification status
+## Design and contract
 
-Latest verified matrix: **104 tests passed per job on Python 3.11 with MongoDB 6.0.28 and 7.0.43**, on 10 October 2026. [Successful MongoDB 6/7 matrix run](https://github.com/Sushantku1099/employee-attendance-analytics-api/actions/runs/38026821086) tested PR #5 head `e003d8ab706f5e99883151bcf0d7dcb869ccf750`. This is PR verification, not verification of a future merge commit.
+`employees` stores people identified by `emp_code`; `attendance_logs` stores one
+record per employee and attendance date. Unique indexes on `emp_code` and
+`(emp_code, date)` prevent duplicate inserts. Conditional updates compare the
+record read earlier; stale punch-outs/corrections return 409. Corrections update
+fields and append history atomically. Other indexes support listing and reports;
+see `DECISIONS.md`.
 
-The suite also passed locally on Python 3.9.6 with both database versions. Earlier Python 3.11/MongoDB 7 verification on 9 October remains historical evidence.
+Instants use strict integer epoch milliseconds in the API and UTC BSON datetimes
+in MongoDB, truncated to whole seconds. Calendar dates and shifts are IST strings,
+including the overnight-shift rule. Half-up rounding, grace and overtime boundaries
+follow `openapi.yaml`. `joined_on` requires a real date in exact YYYY-MM-DD form.
 
-The CI workflow is `.github/workflows/verify.yml`. It runs for pull requests targeting `main` and supports manual execution through GitHub Actions. The successful pull-request run executed `verify_phase3.py`, covering the regression suite, startup and index checks, schema checks, and query-plan verification using 100,000 synthetic attendance logs.
+Four MongoDB aggregation reports provide employee monthly attendance, department
+summaries including employees without logs, competition-ranked late employees,
+and daily department trends including gaps and a seven-day moving average.
+Analytics read stored derived metrics. Explain runs executionStats on the shared
+query builders and preserves raw BSON values using Extended JSON.
 
-- [Historical MongoDB 7 CI run](https://github.com/Sushantku1099/employee-attendance-analytics-api/actions/runs/37941164000)
-- [CI workflow](https://github.com/Sushantku1099/employee-attendance-analytics-api/blob/main/.github/workflows/verify.yml)
+The independent OpenAPI comparator requires zero normalized structural differences,
+without field exceptions. Documentation metadata and equivalent schema forms are
+normalized; exact OpenAPI document equality and runtime behavior are separate checks.
+Only `/health` has a contract-defined 503. Other routes do not translate database
+connectivity failures; this remains a limitation rather than adding undocumented
+response codes or hiding programming errors.
 
-The workflow verifies Python 3.11 against both `mongo:6.0` and `mongo:7` image tags. Dependencies are not fully locked, so this is not a guarantee of bit-for-bit reproducible builds. The full suite also passed locally on Python 3.9.6 with MongoDB 6.0.28 on 10 October 2026. The assignment's hidden grading dataset remains unverified.
+## Verification and limitations
 
-Raw explain output retains internal MongoDB plan fields and uses Extended JSON for BSON values. See `REVIEW.md` for commands, counts and the historical verification record.
+[Verified merged-main matrix run](https://github.com/Sushantku1099/employee-attendance-analytics-api/actions/runs/38027764363)
+passed 66 unittest tests and 38 helper checks per Python 3.11.17 job on MongoDB 6.0.28 and 7.0.43 for commit
+`fe58ce949d71eef6365edd57d46118a3b8cd7265`. The current date/schema change passed
+67 unittest tests and 38 helper checks locally on Python 3.9.6 with each database version; current PR checks
+provide separate Python 3.11 evidence. See `REVIEW.md` for exact commands, package
+versions, results and historical failures.
 
-This is a Git repository on GitHub. Keep `.env`, virtual environments, caches,
-credentials and dumps out of commits; `.gitignore` covers these artifacts. Preserve
-`PROBLEM_STATEMENT.docx`, `openapi.yaml`, `DATA_MODEL.md`, and the supplied sample
-files for evaluation. Do not include a Dockerfile in the submission.
+[CI workflow](.github/workflows/verify.yml) runs for PRs targeting `main` and manual
+execution. Requirements use lower bounds, not a lock file, and Docker image tags
+remain mutable. No clean Python 3.11 lock was generated locally; its installed
+interpreter lacks the application dependencies. Fresh CI installations test the
+current resolution, not bit-for-bit reproducibility.
+
+Hidden grader data, long-history stress, cold index creation on 100,000 preseeded
+logs and all deployment/filter combinations remain unverified. Keep `.env`, secrets,
+environments, caches, dumps and Dockerfiles out of the public submission. Preserve
+the supplied assignment documents and samples. `REVIEW.md` retains dated history;
+earlier limitations there may be superseded by later entries.

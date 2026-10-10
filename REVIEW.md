@@ -1,3 +1,6 @@
+Current changes and verification are recorded in "Submission contract quality update"
+at the end of this file. Earlier sections retain their dated historical findings.
+
 # Phase 1 review — 9 October 2026
 
 Reviewed the current files against PROBLEM_STATEMENT.docx, openapi.yaml and DATA_MODEL.md. No original starter snapshot or Git history exists here, so this report does not invent defects already fixed before this review.
@@ -755,3 +758,115 @@ words (246 including the separate compatibility note), meeting the guidance.
 Earlier REVIEW statements are dated historical findings, not current-state claims.
 Submission recommendation: ready with these risks; human review/merge of PR #5
 and selection of the final submission SHA remain outstanding. No automatic merge.
+
+## Submission contract quality update (2026-10-10)
+
+Base: verified origin/main fe58ce949d71eef6365edd57d46118a3b8cd7265, clean working
+tree. Created fix/submission-contract-quality from that exact base. The successful
+manual main-branch matrix run 38027764363 supersedes earlier PR-only evidence;
+README now links it explicitly. Earlier schema-exception entries above are history.
+
+### Fix and targeted coverage
+
+The supplied EmployeeCreate.joined_on schema has type string and format date but
+no pattern. Removed only the extra Pydantic field pattern; validate_joined_on now
+parses a real date and requires parsed.isoformat() == value. This keeps exact
+YYYY-MM-DD validation even on Python 3.11, which accepts compact/week ISO input in
+date.fromisoformat. The generated field is checked exactly after metadata removal.
+The comparator has no KNOWN_DIFFERENCE/DATE_PATTERN allowance and requires zero
+normalized differences across every path/method, parameter collection, request,
+status collection and response schema. Metadata and representation normalization
+remain documented; this does not assert byte-for-byte document equality.
+
+Regressions: OpenAPITests.test_joined_on_runtime extends invalid-calendar, compact,
+week-date, timestamp and whitespace inputs; test_request_fields forbids a generated
+pattern. ContractTests.test_joined_on_schema_has_no_extra_constraints checks the
+exact field and rejects added patterns there or on another field. The full comparison
+and existing 13 mutation subcases still run. Phase1Tests.test_joined_on_dates_over_http
+asserts 422 with array detail and body/joined_on error location for 10 invalid forms,
+then 201 and unchanged representation for valid leap date 2024-02-29. Its employee
+uses a separate department so existing filtered-total fixtures remain independent.
+
+Existing tests already cover timestamp omission/null and invalid units; repeated
+and overnight punch-outs; duration and half-day/overtime boundaries; correction
+no-ops/status-time constraints, derived recalculation and exact history changes;
+conditional stale-update 409s; competition ties, no-log employees, zero headcount,
+half-up averages/rates and filtered totals. Retained these tests rather than adding
+copies or sleep-based races. Only one unittest method was added to the full suite.
+
+### Database failures and dependencies
+
+The supplied responses list 503 only on health. No other route is given a new
+response code, and no blanket exception handler is added. Health's existing mocked
+outage check remains; actual connectivity failures on other routes are deliberately
+recorded as a limitation. Exact runtime outage behavior is not newly verified.
+
+Local Python 3.11.16 is installed but has none of the six required distributions;
+no environment or dependency installation was performed. The existing Python 3.9.6
+environment was used. Versions from importlib.metadata:
+
+| Package | Local verified environment | Verified main CI Python 3.11.17 |
+|---|---|---|
+| FastAPI | 0.128.8 | 0.143.0 |
+| Pydantic | 2.13.5 | 2.14.0 |
+| PyMongo | 4.18.3 | 4.18.3 |
+| Uvicorn | 0.39.0 | 0.54.0 |
+| python-dotenv | 1.2.1 | 1.2.4 |
+| PyYAML | 6.0.3 | 6.0.3 |
+| Starlette | 0.49.3 | 1.7.0 |
+
+CI versions were observed in successful run 38027764363's installation logs;
+local versions were queried directly. No constraints were invented from log text
+or a Python 3.9 freeze. Requirements retain their lower bounds: generating a clean
+Python 3.11 lock and verifying its installation was not performed. CI and README
+both use pip install -r requirements.txt. MongoDB tags remain mutable.
+
+### Actual validation
+
+Both images were already installed; no pull was needed. Inspected verify_phase3.py
+before execution: unique container and database names, dynamic loopback port,
+explicit environment overrides, absent-database assertion, and owned API/container
+cleanup. Never ran sample_seed.py or used an existing database.
+
+Database-free commands used the existing environment. Set
+`export MONGO_URI='mongodb://127.0.0.1:1/?connect=false'` first, so application imports
+cannot start background connections to a local user database. The tests mock
+all database operations; the full runner overrides this setting with its owned URI.
+
+| Exact command | Exit | Result |
+|---|---|---|
+| `.venv/bin/python -B static_helper_tests.py` | 0 | 38 helper checks passed |
+| `.venv/bin/python -B openapi_tests.py` | 0 | 8 unittest tests passed |
+| `.venv/bin/python -B openapi_contract_tests.py` | 0 | 6 unittest tests passed; zero normalized differences |
+| `.venv/bin/python -B phase2_unit_tests.py` | 0 | 7 unittest tests passed |
+| `.venv/bin/python -B phase3_schema_tests.py` | 0 | 2 unittest tests passed |
+| `.venv/bin/python -B verify_phase3.py --mongo-image mongo:6.0` | 0 | MongoDB 6.0.28; 67 unittest tests + 38 helper checks passed |
+| `.venv/bin/python -B verify_phase3.py --mongo-image mongo:7` | 0 | MongoDB 7.0.43; 67 unittest tests + 38 helper checks passed |
+| `git diff --check` | 0 | No whitespace errors |
+
+Full-run output was redirected respectively to /tmp/candidate-quality-mongo6.log
+and /tmp/candidate-quality-mongo7.log, outside the repository. Each full run also
+passed 2 empty-database analytics checks, 7 startup/index assertions, served-schema
+equality and punch-out IXSCAN. Seven real executionStats plans on 100,000 logs
+had no root/lookup collection scans (covered inside Phase 3 unittest methods, not
+counted as seven additional tests). Both containers were removed by the runner.
+Subtest inputs and assertions are not counted as separate unittest methods. Earlier
+reports' combined 104 count is 66 unittest tests plus 38 helper checks; the current
+combined count is 105 because of the one added HTTP method.
+
+Syntax check: `.venv/bin/python -B -` called
+`compile(Path(name).read_text(), name, 'exec')` for app/main.py, openapi_tests.py,
+openapi_contract_tests.py and phase1_tests.py: exit 0, four files passed without
+bytecode artifacts. Inspected the complete diff. Supplied contracts, samples,
+seed script, index strategy, report calculations and workflow are unchanged.
+
+Remaining limitations: no Python 3.11 dependency lock/clean locked installation,
+hidden grader data, long-history stress, cold index creation on 100,000 preseeded
+logs, all deployment/filter combinations and non-health outage handling. No hidden
+score or complete behavioral proof is claimed. Fresh PR CI provides separate
+Python 3.11 verification; the local runs above are Python 3.9.6 results.
+
+Final tracked-file scan found no prohibited paths or credential-pattern candidates;
+this is a targeted scan, not an exhaustive history audit. Compared protected file
+bytes with base fe58ce9: assignment documents, both sample files, sample_seed.py,
+requirements.txt and the workflow are unchanged. Final git diff --check exited 0.

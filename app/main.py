@@ -191,12 +191,14 @@ class EmployeeIn(BaseModel):
     department: str = Field(min_length=1, max_length=50)
     shift_start: str = Field(default="09:30", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     shift_end: str = Field(default="18:30", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
-    joined_on: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$", json_schema_extra={"format": "date"})
+    joined_on: str = Field(json_schema_extra={"format": "date"})
 
     @field_validator("joined_on")
     @classmethod
     def validate_joined_on(cls, value: str) -> str:
-        date.fromisoformat(value)
+        parsed = date.fromisoformat(value)
+        if parsed.isoformat() != value:
+            raise ValueError("joined_on must use YYYY-MM-DD")
         return value
 
     @model_validator(mode="after")
