@@ -567,3 +567,59 @@ Requirements are not fully locked and mongo:7 is a moving tag. MongoDB 6, hidden
 grader data, long-history stress and cold index creation on the preseeded large
 dataset remain unverified. No application, test or workflow code changed in this
 update; no dependencies were installed and no branch, commit or remote was changed.
+
+## Permanent database-free contract comparison (2026-10-10)
+
+Added `openapi_contract_tests.py`, loading the supplied YAML independently and
+comparing every path/method, full parameter collection (including requiredness
+and constraints), request body, status-code collection and response schema.
+References are expanded so nested model fields are checked regardless of model
+names. Documentation text/examples, operation IDs, tags and document metadata
+are excluded; equivalent nullable/const/singleton-allOf forms are normalized.
+This does not assert exact OpenAPI document equality or runtime business rules.
+Unused component definitions are not independently matched by name.
+
+The earlier 60/61 comparison difference is still present: only
+`POST /employees` request `joined_on` adds `pattern: ^\d{4}-\d{2}-\d{2}$` to
+`type: string, format: date`. The test explicitly allows precisely that extra
+pattern at that location, and reports it. Changes to that regex or any other
+constraint remain failures. Comparator mutation tests cover removed paths,
+methods, parameters, statuses and response fields, changed field bounds,
+requiredness, query bounds and nullability. Field names such as `description`
+and `title` remain compared even though similarly named metadata is ignored.
+
+The MongoClient constructor is replaced before importing the application; any
+database method access raises an assertion. No lifespan or API server is started
+by this test. The full runner executes it before starting Docker. PyYAML is now
+an explicit requirement because a fresh installation did not guarantee a YAML
+parser. Existing local PyYAML 6.0.3 was used; nothing was installed locally.
+
+Commands executed using the existing Python 3.9.6 environment:
+
+- `.venv/bin/python -B openapi_contract_tests.py`: exit 0, 4 tests passed,
+  including 11 mutation subcases. During development two earlier attempts exited
+  1 because the new response-mutation test used a nonexistent model name;
+  corrected to the actual `Employee` model without changing application code.
+- `.venv/bin/python -B openapi_tests.py`: exit 0, 8 tests passed.
+- `.venv/bin/python -B phase3_schema_tests.py`: exit 0, 2 tests passed.
+- `.venv/bin/python -B verify_phase3.py > /tmp/candidate-contract-full-suite.log 2>&1`:
+  exit 0, 102 tests passed (4 contract + existing 98). Isolated MongoDB 7.0.43;
+  2 empty-database checks, 7 startup/index checks and 1 served-schema check passed.
+  Seven real executionStats plans on 100,000 logs had no root/lookup collection
+  scans; punch-out used IXSCAN. Cleanup removed only the owned test container.
+- `.venv/bin/python -B -` with `compile(Path(filename).read_text(), filename, 'exec')`
+  for `openapi_contract_tests.py` and `verify_phase3.py`: exit 0, 2 files compiled
+  without writing bytecode.
+- `git diff --check`: exit 0.
+
+Runner isolation was inspected before execution: unique fresh container, dynamic
+loopback port, explicit URI/database overrides, absent database assertion, and
+owned-process/container cleanup in finally. No sample seed or existing database
+was used. Application code and supplied contracts/sample data are unchanged.
+MongoDB 6 and hidden-grader behavior remain outside this verification.
+
+After adding the final three mutation subcases, reran
+`.venv/bin/python -B verify_phase3.py > /tmp/candidate-contract-full-suite-final.log 2>&1`:
+exit 0, all 102 tests and the same additional startup/schema/plan checks passed;
+the disposable container was removed. The final standalone comparator also
+passed all 4 tests with 11 mutation subcases.
