@@ -673,3 +673,50 @@ Reference expansion supports this contract's acyclic local references, including
 chains and nested fields. Recursive self-referential schema cycles and external
 references are unsupported. Unused component definitions and runtime behavior
 remain outside the structural comparison; exact document equality is not claimed.
+
+## MongoDB 6 compatibility verification (2026-10-10)
+
+Started with a clean working tree at bd52cbf on the existing verification branch;
+fetched and fast-forwarded to merged main 31a2965. Inspected README, requirements,
+workflow and runner before changes. `docker image ls --format '{{.Repository}}:{{.Tag}} {{.ID}}'`
+showed mongo:7 available and no mongo:6.0 image. Reported the missing image before
+`docker pull mongo:6.0` (exit 0); no Python dependencies or environments installed.
+Pulled image digest: sha256:8b6d8f5bbedb25cb73517b65cf99f13aeb75ad5b157a56c479287a840bbad3ac.
+
+Runner now accepts only --mongo-image mongo:6.0 or mongo:7 (default remains 7).
+It requires the image already present and does not pull automatically. Each run
+uses a UUID container name, dynamic loopback port, UUID database name, explicit
+URI/database overrides and an absent-database assertion. No mounts or existing
+user databases are used. Finally cleanup terminates only the owned API process
+and stops only its --rm container. The database-free comparator runs first.
+
+Commands and observed results, using the existing Python 3.9.6 environment:
+
+- `.venv/bin/python -B verify_phase3.py > /tmp/candidate-mongo7-compat.log 2>&1`:
+  exit 0, MongoDB 7.0.43, 104 tests passed.
+- `.venv/bin/python -B verify_phase3.py --mongo-image mongo:6.0 > /tmp/candidate-mongo6-compat.log 2>&1`:
+  exit 0, MongoDB 6.0.28, 104 tests passed.
+- `.venv/bin/python -B verify_phase3.py --help`: exit 0, both image choices shown.
+
+Each full run passed 6 contract, 8 schema, 2 Phase 3 schema, 38 helper, 7 Phase 2
+unit, 9 Phase 1 HTTP, 21 Phase 2 HTTP and 13 Phase 3 HTTP/plan tests. Additional
+checks passed: 2 empty-database analytics, 7 startup/index assertions with repeated
+lifespan, served schema equality, and punch-out IXSCAN without COLLSCAN. Seven
+real executionStats plans on 100,000 logs had no root or lookup collection scans.
+Both runs confirmed removal of their own disposable container. No compatibility
+defect was established; no application behavior was changed.
+
+The workflow now runs independent Python 3.11 jobs for mongo:6.0 and mongo:7 with
+fail-fast disabled, unchanged read-only permissions and 20-minute per-job timeout.
+Each pulls only its selected test image and runs the complete suite. This preserves
+MongoDB 7 coverage and makes the declared MongoDB 6 support a continuing check.
+Local results do not establish compatibility with every MongoDB 6 patch, hidden
+grader data, long histories or different deployment configurations. Tags and
+requirements remain moving/unlocked. Earlier limitations above are historical.
+
+`.venv/bin/python -B -` parsed the workflow with PyYAML BaseLoader and asserted
+both matrix images, fail-fast false, read-only permissions, 20-minute timeout and
+the selected-image runner command; it compiled verify_phase3.py via compile()
+without bytecode. Exit 0. `git diff --check`: exit 0. Inspected the complete diff:
+only runner, workflow and README/REVIEW/DECISIONS changed; assignment, application,
+requirements, tests and sample data remained unchanged.

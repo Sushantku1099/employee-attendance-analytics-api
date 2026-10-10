@@ -1,8 +1,10 @@
 """Run Phase 1/2/3 checks against a new disposable MongoDB container.
 
-Requires Docker, an already available mongo:7 image, and installed requirements.
+Requires Docker, an already available selected image, and installed requirements.
+Defaults to mongo:7; use --mongo-image mongo:6.0 to check MongoDB 6 compatibility.
 Never connects to user databases. Stops only the container and API it starts.
 """
+import argparse
 import asyncio
 import json
 from datetime import datetime, timezone
@@ -18,6 +20,10 @@ import uuid
 
 from pymongo import MongoClient
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--mongo-image', choices=('mongo:6.0', 'mongo:7'), default='mongo:7')
+args = parser.parse_args()
+
 # Fail on contract drift before starting Docker or connecting to a database.
 subprocess.run([sys.executable, '-B', 'openapi_contract_tests.py'], check=True)
 
@@ -27,9 +33,9 @@ mongo = None
 started_container = False
 with tempfile.TemporaryFile(mode='w+') as log:
     try:
-        subprocess.run(['docker', 'image', 'inspect', 'mongo:7'], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(['docker', 'image', 'inspect', args.mongo_image], check=True, stdout=subprocess.DEVNULL)
         subprocess.run(['docker', 'run', '--rm', '-d', '--name', container_name,
-            '-p', '127.0.0.1::27017', 'mongo:7'], check=True, stdout=subprocess.DEVNULL)
+            '-p', '127.0.0.1::27017', args.mongo_image], check=True, stdout=subprocess.DEVNULL)
         started_container = True
         address = subprocess.check_output(['docker', 'port', container_name, '27017/tcp'], text=True).strip()
         uri = 'mongodb://' + address
@@ -43,7 +49,7 @@ with tempfile.TemporaryFile(mode='w+') as log:
                 if time.monotonic() >= deadline:
                     raise
                 time.sleep(.2)
-        database_name = 'phase3_review'
+        database_name = 'phase3_review_' + uuid.uuid4().hex[:12]
         assert database_name not in mongo.list_database_names()
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))

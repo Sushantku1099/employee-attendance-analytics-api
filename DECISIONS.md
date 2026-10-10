@@ -9,3 +9,5 @@
 4. **Headcount.** Department summaries start from employees who joined by month end, then look up logs. People without logs still count. Trends generate dates and count eligible employees in MongoDB. Decimal arithmetic provides half-up rounding; moving averages use rounded daily rates.
 
 5. **At larger scale.** Measure latency, examined documents and memory before changing indexes. Consider precomputed daily summaries and cursor pagination. Long histories may need a revision counter. Keep raw executionStats available to check changes.
+
+6. **MongoDB compatibility checks.** The isolated runner defaults to MongoDB 7 and accepts an explicit MongoDB 6.0 image choice. UUID database names and containers keep each run separate. CI runs the full suite on both versions rather than reducing the older-version checks; application code is shared unchanged.

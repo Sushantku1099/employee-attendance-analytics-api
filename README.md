@@ -24,6 +24,8 @@ requirements installed, Docker running, and the `mongo:7` image already availabl
 
 ```bash
 python -B verify_phase3.py
+# With the mongo:6.0 image already available:
+python -B verify_phase3.py --mongo-image mongo:6.0
 ```
 
 This runs Phase 1/2/3 helper, model, schema and actual HTTP tests, including query
@@ -51,7 +53,7 @@ The CI workflow is `.github/workflows/verify.yml`. It runs for pull requests tar
 - [CI run](https://github.com/Sushantku1099/employee-attendance-analytics-api/actions/runs/37941164000)
 - [CI workflow](https://github.com/Sushantku1099/employee-attendance-analytics-api/blob/main/.github/workflows/verify.yml)
 
-The workflow verifies the current dependency installation against the moving `mongo:7` image tag. Dependencies are not fully locked, so this is not a guarantee of bit-for-bit reproducible builds. MongoDB 6 and the assignment's hidden grading dataset have not been independently verified.
+The workflow verifies Python 3.11 against both `mongo:6.0` and `mongo:7` image tags. Dependencies are not fully locked, so this is not a guarantee of bit-for-bit reproducible builds. The full suite also passed locally on Python 3.9.6 with MongoDB 6.0.28 on 10 October 2026. The assignment's hidden grading dataset remains unverified.
 
 Raw explain output retains internal MongoDB plan fields and uses Extended JSON for BSON values. See `REVIEW.md` for commands, counts and the historical verification record.
 
