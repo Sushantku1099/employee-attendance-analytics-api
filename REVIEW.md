@@ -567,3 +567,109 @@ Requirements are not fully locked and mongo:7 is a moving tag. MongoDB 6, hidden
 grader data, long-history stress and cold index creation on the preseeded large
 dataset remain unverified. No application, test or workflow code changed in this
 update; no dependencies were installed and no branch, commit or remote was changed.
+
+## Permanent database-free contract comparison (2026-10-10)
+
+Added `openapi_contract_tests.py`, loading the supplied YAML independently and
+comparing every path/method, full parameter collection (including requiredness
+and constraints), request body, status-code collection and response schema.
+References are expanded so nested model fields are checked regardless of model
+names. Documentation text/examples, operation IDs, tags and document metadata
+are excluded; equivalent nullable/const/singleton-allOf forms are normalized.
+This does not assert exact OpenAPI document equality or runtime business rules.
+Unused component definitions are not independently matched by name.
+
+The earlier 60/61 comparison difference is still present: only
+`POST /employees` request `joined_on` adds `pattern: ^\d{4}-\d{2}-\d{2}$` to
+`type: string, format: date`. The test explicitly allows precisely that extra
+pattern at that location, and reports it. Changes to that regex or any other
+constraint remain failures. Comparator mutation tests cover removed paths,
+methods, parameters, statuses and response fields, changed field bounds,
+requiredness, query bounds and nullability. Field names such as `description`
+and `title` remain compared even though similarly named metadata is ignored.
+
+The MongoClient constructor is replaced before importing the application; any
+database method access raises an assertion. No lifespan or API server is started
+by this test. The full runner executes it before starting Docker. PyYAML is now
+an explicit requirement because a fresh installation did not guarantee a YAML
+parser. Existing local PyYAML 6.0.3 was used; nothing was installed locally.
+
+Commands executed using the existing Python 3.9.6 environment:
+
+- `.venv/bin/python -B openapi_contract_tests.py`: exit 0, 4 tests passed,
+  including 11 mutation subcases. During development two earlier attempts exited
+  1 because the new response-mutation test used a nonexistent model name;
+  corrected to the actual `Employee` model without changing application code.
+- `.venv/bin/python -B openapi_tests.py`: exit 0, 8 tests passed.
+- `.venv/bin/python -B phase3_schema_tests.py`: exit 0, 2 tests passed.
+- `.venv/bin/python -B verify_phase3.py > /tmp/candidate-contract-full-suite.log 2>&1`:
+  exit 0, 102 tests passed (4 contract + existing 98). Isolated MongoDB 7.0.43;
+  2 empty-database checks, 7 startup/index checks and 1 served-schema check passed.
+  Seven real executionStats plans on 100,000 logs had no root/lookup collection
+  scans; punch-out used IXSCAN. Cleanup removed only the owned test container.
+- `.venv/bin/python -B -` with `compile(Path(filename).read_text(), filename, 'exec')`
+  for `openapi_contract_tests.py` and `verify_phase3.py`: exit 0, 2 files compiled
+  without writing bytecode.
+- `git diff --check`: exit 0.
+
+Runner isolation was inspected before execution: unique fresh container, dynamic
+loopback port, explicit URI/database overrides, absent database assertion, and
+owned-process/container cleanup in finally. No sample seed or existing database
+was used. Application code and supplied contracts/sample data are unchanged.
+MongoDB 6 and hidden-grader behavior remain outside this verification.
+
+After adding the final three mutation subcases, reran
+`.venv/bin/python -B verify_phase3.py > /tmp/candidate-contract-full-suite-final.log 2>&1`:
+exit 0, all 102 tests and the same additional startup/schema/plan checks passed;
+the disposable container was removed. The final standalone comparator also
+passed all 4 tests with 11 mutation subcases.
+
+## PR #4 exception review (2026-10-10)
+
+Confirmed the only raw flattened difference is exactly
+`('/employees', 'post', 'request', 'content', 'application/json', 'schema',
+'properties', 'joined_on', 'pattern')`, with supplied `<missing>` and generated
+`^\d{4}-\d{2}-\d{2}$`. A focused test initially failed (exit 1, 6 tests,
+1 failure): removing the generated regex produced no difference and passed.
+The comparator now requires the documented baseline constraint to remain present;
+removal requires an explicit exception review. Changed regexes and the same regex
+on another field also fail. Added chained/nested local-reference normalization
+coverage and response-required-field/constraint mutation cases. No application
+or assignment files changed.
+
+Executed `.venv/bin/python -B openapi_contract_tests.py`: exit 0, 6 tests passed,
+including the exact exception's three rejection subcases and 13 general mutation
+subcases. The existing standalone commands `.venv/bin/python -B openapi_tests.py`,
+`.venv/bin/python -B phase3_schema_tests.py`, `.venv/bin/python -B static_helper_tests.py`,
+and `.venv/bin/python -B phase2_unit_tests.py` passed 8, 2, 38 and 7 checks respectively.
+Also reran each in a fresh process with the MongoClient constructor mocked before
+import, to prevent background connection attempts. Exact wrapper command:
+
+```bash
+.venv/bin/python -B - <<'PY'
+import subprocess
+import sys
+for filename in ('openapi_tests.py', 'phase3_schema_tests.py', 'static_helper_tests.py', 'phase2_unit_tests.py'):
+    code = 'from unittest.mock import patch; import runpy\nwith patch("pymongo.MongoClient"):\n    runpy.run_path(' + repr(filename) + ', run_name="__main__")'
+    result = subprocess.run([sys.executable, '-B', '-c', code], capture_output=True, text=True)
+    print(filename, 'exit', result.returncode)
+    for line in (result.stdout + result.stderr).splitlines():
+        if line.startswith(('Ran ', 'Results:', 'OK', 'FAILED')):
+            print(line)
+    if result.returncode:
+        print(result.stderr)
+    result.check_returncode()
+PY
+```
+
+Wrapper exit 0; all four subprocesses exited 0 with the same counts. Two earlier
+wrapper experiments importing the comparator's strict NoDatabase guard first
+failed during mock introspection in static_helper_tests, rather than a database
+operation. The temporary guard compatibility change was reverted; the final
+wrapper directly mocks the constructor. No dependencies installed or database
+fixtures run locally in this review. `git diff --check` passed.
+
+Reference expansion supports this contract's acyclic local references, including
+chains and nested fields. Recursive self-referential schema cycles and external
+references are unsupported. Unused component definitions and runtime behavior
+remain outside the structural comparison; exact document equality is not claimed.

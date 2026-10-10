@@ -18,6 +18,9 @@ import uuid
 
 from pymongo import MongoClient
 
+# Fail on contract drift before starting Docker or connecting to a database.
+subprocess.run([sys.executable, '-B', 'openapi_contract_tests.py'], check=True)
+
 container_name = 'candidate-phase3-' + uuid.uuid4().hex[:12]
 server = None
 mongo = None

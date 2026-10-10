@@ -37,6 +37,7 @@ Database-free checks can also run individually:
 ```bash
 python -B static_helper_tests.py
 python -B openapi_tests.py
+python -B openapi_contract_tests.py
 python -B phase2_unit_tests.py
 python -B phase3_schema_tests.py
 ```
