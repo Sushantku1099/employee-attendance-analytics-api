@@ -183,10 +183,9 @@ paths:
       operationId: punchOut
       summary: Record a punch-out
       description: |
-        Closes the employee's most recent record whose `punch_in` is at or before `punched_at` (this must work across
-        midnight for overnight shifts). Computes `work_hours` (R4), `overtime_minutes` (R3) and `half_day` (R5).
-        Errors: 404 unknown employee, or no punch-in found; 409 that record is already punched out (two simultaneous
-        punch-outs must yield exactly one 200); 422 if `punched_at` <= `punch_in` or more than 24 hours after it.
+        Closes the employee's most recent record whose `punch_in` is at or before `punched_at`, including records that have already been closed. The endpoint must not fall back to an older open record when the latest eligible record is already closed. In that case, it returns `409 Conflict`. This prevents a repeated punch-out from accidentally closing an earlier shift. The record update is atomic: concurrent punch-out requests must yield exactly one `200` and a `409` for the losing request.
+
+        Computes `work_hours` (R4), `overtime_minutes` (R3) and `half_day` (R5). Errors: 404 for an unknown employee or no eligible punch-in; 409 when the latest eligible record is already punched out or another request updated it first; 422 if `punched_at` is at or before `punch_in` or more than 24 hours after it.
       requestBody:
         required: true
         content:
