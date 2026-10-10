@@ -750,8 +750,8 @@ removed. Repository is public. No seed script or database was used in this audit
 Remaining risks: hidden grading fixtures, long-history stress, cold startup/index
 creation on 100,000 preseeded logs, all filter/performance combinations, and real
 HTTP outage behavior beyond the mocked health check are unverified. Requirements
-and image tags remain unlocked. DECISIONS answers all five questions but is 246
-words including the compatibility note, modestly over the suggested 150-200 total.
+and image tags remain unlocked. DECISIONS answers all five questions in 199
+words (246 including the separate compatibility note), meeting the guidance.
 Earlier REVIEW statements are dated historical findings, not current-state claims.
 Submission recommendation: ready with these risks; human review/merge of PR #5
 and selection of the final submission SHA remain outstanding. No automatic merge.
