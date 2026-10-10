@@ -120,7 +120,11 @@ def unexpected_differences(expected, actual):
     # Group keys are tuples; flatten them for a precise, readable exception path.
     found = [(path[0] + path[1:], before, after) for path, before, after in found]
     allowed = (KNOWN_DIFFERENCE, MISSING, DATE_PATTERN)
-    return [item for item in found if item != allowed], allowed in found
+    unexpected = [item for item in found if item != allowed]
+    # Removing this known constraint also requires an explicit baseline review.
+    if not any(path == KNOWN_DIFFERENCE for path, _, _ in found):
+        unexpected.append((KNOWN_DIFFERENCE, DATE_PATTERN, MISSING))
+    return unexpected, allowed in found
 
 
 class ContractTests(unittest.TestCase):
@@ -132,8 +136,37 @@ class ContractTests(unittest.TestCase):
     def test_complete_contract(self):
         unexpected, known = unexpected_differences(self.supplied, self.generated)
         self.assertEqual(unexpected, [], '\n'.join(map(str, unexpected)))
+        self.assertTrue(known)
         print('Contract comparison: all paths/operations, parameters, bodies and responses checked; '
-              + ('explicit joined_on regex exception observed.' if known else 'joined_on exception no longer needed.'))
+              'explicit joined_on regex exception observed.')
+
+    def test_joined_on_exception_is_exact(self):
+        raw = differences(contract_groups(self.supplied), contract_groups(self.generated))
+        flattened = [(path[0] + path[1:], before, after) for path, before, after in raw]
+        self.assertEqual(flattened, [(KNOWN_DIFFERENCE, MISSING, DATE_PATTERN)])
+        self.assertEqual(unexpected_differences(self.supplied, self.generated), ([], True))
+        for case in ('changed', 'missing', 'other_field'):
+            with self.subTest(case=case):
+                document = copy.deepcopy(self.generated)
+                fields = document['components']['schemas']['EmployeeIn']['properties']
+                if case == 'changed':
+                    fields['joined_on']['pattern'] = '.*'
+                elif case == 'missing':
+                    fields['joined_on'].pop('pattern')
+                else:
+                    fields['name']['pattern'] = DATE_PATTERN
+                self.assertTrue(unexpected_differences(self.supplied, document)[0])
+
+    def test_nested_references_preserve_constraints(self):
+        document = {'components': {'schemas': {
+            'Code': {'type': 'string', 'minLength': 3, 'pattern': '^EMP'},
+            'Alias': {'$ref': '#/components/schemas/Code'},
+            'Record': {'type': 'object', 'required': ['code'], 'properties': {
+                'code': {'$ref': '#/components/schemas/Alias'}}},
+        }}}
+        self.assertEqual(normalize({'$ref': '#/components/schemas/Record'}, document),
+                         {'type': 'object', 'required': ['code'], 'properties': {
+                             'code': {'type': 'string', 'minLength': 3, 'pattern': '^EMP'}}})
 
     def test_detects_contract_mutations(self):
         mutations = [
@@ -148,6 +181,8 @@ class ContractTests(unittest.TestCase):
             lambda doc: doc['paths']['/employees']['get']['parameters'][1]['schema'].update(minimum=0),
             lambda doc: doc['paths']['/employees']['get']['parameters'][1].update(required=True),
             lambda doc: doc['components']['schemas']['AttendanceRecord']['properties']['work_hours'].pop('anyOf'),
+            lambda doc: doc['components']['schemas']['AttendanceRecord']['required'].remove('history'),
+            lambda doc: doc['components']['schemas']['Employee']['properties']['created_at'].update(minimum=0),
         ]
         for index, mutate in enumerate(mutations):
             with self.subTest(mutation=index):

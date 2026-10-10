@@ -623,3 +623,53 @@ After adding the final three mutation subcases, reran
 exit 0, all 102 tests and the same additional startup/schema/plan checks passed;
 the disposable container was removed. The final standalone comparator also
 passed all 4 tests with 11 mutation subcases.
+
+## PR #4 exception review (2026-10-10)
+
+Confirmed the only raw flattened difference is exactly
+`('/employees', 'post', 'request', 'content', 'application/json', 'schema',
+'properties', 'joined_on', 'pattern')`, with supplied `<missing>` and generated
+`^\d{4}-\d{2}-\d{2}$`. A focused test initially failed (exit 1, 6 tests,
+1 failure): removing the generated regex produced no difference and passed.
+The comparator now requires the documented baseline constraint to remain present;
+removal requires an explicit exception review. Changed regexes and the same regex
+on another field also fail. Added chained/nested local-reference normalization
+coverage and response-required-field/constraint mutation cases. No application
+or assignment files changed.
+
+Executed `.venv/bin/python -B openapi_contract_tests.py`: exit 0, 6 tests passed,
+including the exact exception's three rejection subcases and 13 general mutation
+subcases. The existing standalone commands `.venv/bin/python -B openapi_tests.py`,
+`.venv/bin/python -B phase3_schema_tests.py`, `.venv/bin/python -B static_helper_tests.py`,
+and `.venv/bin/python -B phase2_unit_tests.py` passed 8, 2, 38 and 7 checks respectively.
+Also reran each in a fresh process with the MongoClient constructor mocked before
+import, to prevent background connection attempts. Exact wrapper command:
+
+```bash
+.venv/bin/python -B - <<'PY'
+import subprocess
+import sys
+for filename in ('openapi_tests.py', 'phase3_schema_tests.py', 'static_helper_tests.py', 'phase2_unit_tests.py'):
+    code = 'from unittest.mock import patch; import runpy\nwith patch("pymongo.MongoClient"):\n    runpy.run_path(' + repr(filename) + ', run_name="__main__")'
+    result = subprocess.run([sys.executable, '-B', '-c', code], capture_output=True, text=True)
+    print(filename, 'exit', result.returncode)
+    for line in (result.stdout + result.stderr).splitlines():
+        if line.startswith(('Ran ', 'Results:', 'OK', 'FAILED')):
+            print(line)
+    if result.returncode:
+        print(result.stderr)
+    result.check_returncode()
+PY
+```
+
+Wrapper exit 0; all four subprocesses exited 0 with the same counts. Two earlier
+wrapper experiments importing the comparator's strict NoDatabase guard first
+failed during mock introspection in static_helper_tests, rather than a database
+operation. The temporary guard compatibility change was reverted; the final
+wrapper directly mocks the constructor. No dependencies installed or database
+fixtures run locally in this review. `git diff --check` passed.
+
+Reference expansion supports this contract's acyclic local references, including
+chains and nested fields. Recursive self-referential schema cycles and external
+references are unsupported. Unused component definitions and runtime behavior
+remain outside the structural comparison; exact document equality is not claimed.
