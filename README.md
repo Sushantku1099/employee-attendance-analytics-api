@@ -41,45 +41,20 @@ python -B phase2_unit_tests.py
 python -B phase3_schema_tests.py
 ```
 
-Verification status: the local full suite passed on the existing Python 3.9.6
-environment with MongoDB 7.0.43. Python 3.11 syntax checks passed, but Python 3.11
-runtime tests have **not** run: the inspected 3.11 environment lacks the required
-dependencies. This does not establish compliance with the required runtime. See
-`REVIEW.md` for exact commands, counts, findings and remaining limits. Raw explain
-output retains internal MongoDB plan fields and uses Extended JSON for BSON values.
+## Verification status
+
+The full regression suite passed locally on Python 3.9.6 with MongoDB 7.0.43. It also passed in GitHub Actions on **Python 3.11 and MongoDB 7** on 9 October 2026.
+
+The CI workflow is `.github/workflows/verify.yml`. It runs for pull requests targeting `main` and supports manual execution through GitHub Actions. The successful pull-request run executed `verify_phase3.py`, covering the regression suite, startup and index checks, schema checks, and query-plan verification using 100,000 synthetic attendance logs.
+
+- [CI run](https://github.com/Sushantku1099/employee-attendance-analytics-api/actions/runs/37941164000)
+- [CI workflow](https://github.com/Sushantku1099/employee-attendance-analytics-api/blob/main/.github/workflows/verify.yml)
+
+The workflow verifies the current dependency installation against the moving `mongo:7` image tag. Dependencies are not fully locked, so this is not a guarantee of bit-for-bit reproducible builds. MongoDB 6 and the assignment's hidden grading dataset have not been independently verified.
+
+Raw explain output retains internal MongoDB plan fields and uses Extended JSON for BSON values. See `REVIEW.md` for commands, counts and the historical verification record.
 
 This is a Git repository on GitHub. Keep `.env`, virtual environments, caches,
 credentials and dumps out of commits; `.gitignore` covers these artifacts. Preserve
 `PROBLEM_STATEMENT.docx`, `openapi.yaml`, `DATA_MODEL.md`, and the supplied sample
 files for evaluation. Do not include a Dockerfile in the submission.
-
-A proposed Python 3.11/MongoDB 7 CI check is below. It is documentation only: no
-workflow has been enabled and no CI pass is claimed. Once approved, save it as
-`.github/workflows/verify.yml`. The GitHub-hosted Ubuntu runner provides Docker;
-installation and image pulling happen only in that fresh CI environment.
-
-```yaml
-name: Verify assignment
-on:
-  pull_request:
-    branches: [main]
-  workflow_dispatch:
-permissions:
-  contents: read
-jobs:
-  verify:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: python -m pip install -r requirements.txt
-      - run: docker pull mongo:7
-      - run: python -B verify_phase3.py
-```
-
-This repeats the verification procedure, not a fully locked dependency environment:
-requirements use lower bounds and `mongo:7` is a moving image tag. Pin tested package
-versions and an image digest if exact build reproducibility is needed.
